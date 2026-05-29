@@ -2,44 +2,48 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": "5f5cb0cd-5130-49f6-8ad9-0fe209f367de"
   },
   "newProjectRoot": "projects",
   "projects": {
     "pharmacy-management": {
       "projectType": "application",
       "schematics": {},
-      "root": "",
-      "sourceRoot": "src",
+      "root": "frontend",
+      "sourceRoot": "frontend/src",
       "prefix": "app",
       "architect": {
         "build": {
           "builder": "@angular/build:application",
           "options": {
-            "browser": "src/main.ts",
-            "tsConfig": "tsconfig.app.json",
+            "browser": "frontend/src/main.ts",
+            "tsConfig": "frontend/tsconfig.app.json",
             "assets": [
               {
                 "glob": "**/*",
-                "input": "public"
-              }
+                "input": "frontend/public"
+              },
+              "frontend/src/favicon.ico",
+              "frontend/src/assets"
             ],
             "styles": [
-              "src/styles.css"
-            ]
+              "frontend/src/styles/global.css"
+            ],
+            "scripts": []
           },
           "configurations": {
             "production": {
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
-                  "maximumError": "1MB"
+                  "maximumWarning": "900kB",
+                  "maximumError": "1.5MB"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "4kB",
-                  "maximumError": "8kB"
+                  "maximumWarning": "16kB",
+                  "maximumError": "32kB"
                 }
               ],
               "outputHashing": "all"
@@ -54,6 +58,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "frontend/proxy.conf.json"
+          },
           "configurations": {
             "production": {
               "buildTarget": "pharmacy-management:build:production"
@@ -64,8 +71,29 @@
           },
           "defaultConfiguration": "development"
         },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n",
+          "options": {
+            "buildTarget": "pharmacy-management:build"
+          }
+        },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "frontend/tsconfig.spec.json",
+            "assets": [
+              "frontend/src/favicon.ico",
+              "frontend/src/assets"
+            ],
+            "styles": [
+              "frontend/src/styles/global.css"
+            ],
+            "scripts": []
+          }
         }
       }
     }
