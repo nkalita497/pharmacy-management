@@ -1,0 +1,103 @@
+Table users {
+  id integer [pk, increment]
+  username text [not null, unique]
+  password text [not null]
+  role text [not null, note: "admin | pharmacist | cashier"]
+  email text
+  mfa_secret text
+  mfa_enabled integer [default: 0]
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table user_preferences {
+  user_id integer [pk]
+  theme text [default: "light", note: "light | dark"]
+  locale text [default: "pl", note: "pl | en | fr"]
+  updated_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table suppliers {
+  id integer [pk, increment]
+  name text [not null]
+  contact text
+  email text
+  phone text
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table medicines {
+  id integer [pk, increment]
+  name text [not null]
+  description text
+  category text
+  supplier_id integer
+  price real [not null]
+  stock integer [default: 0]
+  expiry_date date
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table patients {
+  id integer [pk, increment]
+  first_name text [not null]
+  last_name text [not null]
+  pesel text [unique]
+  email text
+  phone text
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table prescriptions {
+  id integer [pk, increment]
+  patient_id integer [not null]
+  medicine_id integer [not null]
+  quantity integer [not null]
+  doctor_name text
+  prescription_date date
+  expiry_date date
+  status text [default: "pending", note: "pending | completed | cancelled"]
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table sales {
+  id integer [pk, increment]
+  prescription_id integer
+  medicine_id integer [not null]
+  quantity integer [not null]
+  unit_price real [not null]
+  total_price real [not null]
+  user_id integer [not null]
+  sale_date datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table deliveries {
+  id integer [pk, increment]
+  supplier_id integer [not null]
+  medicine_id integer [not null]
+  quantity integer [not null]
+  delivery_date date
+  cost real
+  created_at datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Table audit_log {
+  id integer [pk, increment]
+  user_id integer
+  action text [not null]
+  entity_type text
+  entity_id integer
+  old_value text
+  new_value text
+  timestamp datetime [default: `CURRENT_TIMESTAMP`]
+}
+
+Ref: user_preferences.user_id > users.id
+Ref: medicines.supplier_id > suppliers.id
+Ref: prescriptions.patient_id > patients.id
+Ref: prescriptions.medicine_id > medicines.id
+Ref: sales.prescription_id > prescriptions.id
+Ref: sales.medicine_id > medicines.id
+Ref: sales.user_id > users.id
+Ref: deliveries.supplier_id > suppliers.id
+Ref: deliveries.medicine_id > medicines.id
+Ref: audit_log.user_id > users.id

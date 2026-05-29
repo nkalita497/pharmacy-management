@@ -1,0 +1,896 @@
+tags:
+  - name: System
+  - name: Auth
+  - name: Medicines
+  - name: Suppliers
+  - name: Patients
+  - name: Sales
+  - name: Prescriptions
+  - name: Deliveries
+  - name: Dashboard
+  - name: Audit
+  - name: Search
+  - name: Preferences
+
+paths:
+  /api/health:
+    get:
+      tags: [System]
+      summary: Health check backendu
+      security: []
+      responses:
+        '200':
+          description: Backend dziala
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  features:
+                    type: array
+                    items: { type: string }
+
+  /api/auth:
+    get:
+      tags: [Auth]
+      summary: Pobiera aktywna sesje
+      responses:
+        '200':
+          description: Uzytkownik lub null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/User'
+                  - type: 'null'
+    post:
+      tags: [Auth]
+      summary: Logowanie
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Zalogowano lub wymagane MFA
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/User'
+                  - $ref: '#/components/schemas/MfaChallenge'
+        '400': { description: Niepoprawna captcha }
+        '401': { description: Niepoprawne dane logowania }
+    delete:
+      tags: [Auth]
+      summary: Wylogowanie
+      responses:
+        '200':
+          description: Wylogowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/auth/captcha:
+    get:
+      tags: [Auth]
+      summary: Pobiera captcha
+      security: []
+      responses:
+        '200':
+          description: SVG captcha
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaptchaResponse' }
+
+  /api/auth/mfa/verify:
+    post:
+      tags: [Auth]
+      summary: Potwierdza kod MFA
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, example: '123456' }
+      responses:
+        '200':
+          description: Uwierzytelniono
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { description: Brak aktywnego wyzwania MFA }
+        '401': { description: Niepoprawny kod MFA }
+
+  /api/auth/mfa/setup:
+    post:
+      tags: [Auth]
+      summary: Rozpoczyna konfiguracje MFA
+      responses:
+        '200':
+          description: Zwraca sekret i kod QR
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string }
+                  otpauthUrl: { type: string }
+                  qrCode: { type: string }
+        '401': { description: Brak autoryzacji }
+
+  /api/auth/mfa/enable:
+    post:
+      tags: [Auth]
+      summary: Wlacza MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: MFA wlaczone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '400': { description: Niepoprawne dane MFA }
+        '401': { description: Brak autoryzacji }
+
+  /api/auth/mfa/disable:
+    post:
+      tags: [Auth]
+      summary: Wylacza MFA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        '200':
+          description: MFA wylaczone
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '401': { description: Brak autoryzacji lub zle haslo }
+
+  /api/medicines:
+    get:
+      tags: [Medicines]
+      summary: Lista lekow (paginacja)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: sort, schema: { type: string, default: name } }
+        - { in: query, name: order, schema: { type: string, enum: [asc, desc], default: asc } }
+        - { in: query, name: q, schema: { type: string } }
+      responses:
+        '200':
+          description: Lista lekow
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedMedicines' }
+    post:
+      tags: [Medicines]
+      summary: Tworzy lek
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MedicineRequest' }
+      responses:
+        '201':
+          description: Utworzono lek
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/medicines/import:
+    post:
+      tags: [Medicines]
+      summary: Import lekow z CSV
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Import zakonczony
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+        '400': { description: Brak pliku }
+
+  /api/medicines/{id}:
+    get:
+      tags: [Medicines]
+      summary: Pobiera lek po ID
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Lek
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Medicine' }
+        '404': { description: Nie znaleziono }
+    put:
+      tags: [Medicines]
+      summary: Aktualizuje lek
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MedicineRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Medicines]
+      summary: Usuwa lek
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/suppliers:
+    get:
+      tags: [Suppliers]
+      summary: Lista dostawcow (paginacja)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: q, schema: { type: string } }
+      responses:
+        '200':
+          description: Lista dostawcow
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedSuppliers' }
+    post:
+      tags: [Suppliers]
+      summary: Tworzy dostawce
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierRequest' }
+      responses:
+        '201':
+          description: Utworzono dostawce
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/suppliers/{id}:
+    get:
+      tags: [Suppliers]
+      summary: Pobiera dostawce po ID
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Dostawca
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Supplier' }
+    put:
+      tags: [Suppliers]
+      summary: Aktualizuje dostawce
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SupplierRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Suppliers]
+      summary: Usuwa dostawce
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/patients:
+    get:
+      tags: [Patients]
+      summary: Lista pacjentow (paginacja)
+      parameters:
+        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+        - { in: query, name: q, schema: { type: string } }
+      responses:
+        '200':
+          description: Lista pacjentow
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedPatients' }
+    post:
+      tags: [Patients]
+      summary: Tworzy pacjenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientRequest' }
+      responses:
+        '201':
+          description: Utworzono pacjenta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/patients/{id}:
+    get:
+      tags: [Patients]
+      summary: Pobiera pacjenta po ID
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Pacjent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Patient' }
+    put:
+      tags: [Patients]
+      summary: Aktualizuje pacjenta
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatientRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Patients]
+      summary: Usuwa pacjenta
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/sales:
+    get:
+      tags: [Sales]
+      summary: Lista sprzedazy
+      responses:
+        '200':
+          description: Lista rekordow
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Sale' }
+    post:
+      tags: [Sales]
+      summary: Tworzy sprzedaz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRequest' }
+      responses:
+        '201':
+          description: Utworzono rekord
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/sales/report/pdf:
+    get:
+      tags: [Sales]
+      summary: Raport sprzedazy PDF
+      responses:
+        '200':
+          description: Plik PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /api/sales/{id}:
+    get:
+      tags: [Sales]
+      summary: Pobiera sprzedaz po ID
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Rekord sprzedazy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sale' }
+    put:
+      tags: [Sales]
+      summary: Aktualizuje sprzedaz
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Sales]
+      summary: Usuwa sprzedaz
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/prescriptions:
+    get:
+      tags: [Prescriptions]
+      summary: Lista rekordow prescriptions
+      responses:
+        '200':
+          description: Lista rekordow
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Sale' }
+    post:
+      tags: [Prescriptions]
+      summary: Tworzy rekord prescriptions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRequest' }
+      responses:
+        '201':
+          description: Utworzono rekord
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/prescriptions/report/pdf:
+    get:
+      tags: [Prescriptions]
+      summary: Raport prescriptions PDF
+      responses:
+        '200':
+          description: Plik PDF
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /api/prescriptions/{id}:
+    get:
+      tags: [Prescriptions]
+      summary: Pobiera rekord prescriptions po ID
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Rekord
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Sale' }
+    put:
+      tags: [Prescriptions]
+      summary: Aktualizuje rekord prescriptions
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Prescriptions]
+      summary: Usuwa rekord prescriptions
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/deliveries:
+    get:
+      tags: [Deliveries]
+      summary: Lista dostaw
+      responses:
+        '200':
+          description: Lista dostaw
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DeliveryListItem' }
+    post:
+      tags: [Deliveries]
+      summary: Tworzy dostawe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeliveryRequest' }
+      responses:
+        '201':
+          description: Utworzono dostawe
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateResponse' }
+
+  /api/deliveries/{id}:
+    put:
+      tags: [Deliveries]
+      summary: Aktualizuje dostawe
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeliveryRequest' }
+      responses:
+        '200':
+          description: Zaktualizowano
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+    delete:
+      tags: [Deliveries]
+      summary: Usuwa dostawe
+      parameters:
+        - { $ref: '#/components/parameters/IdPath' }
+      responses:
+        '200':
+          description: Usunieto
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResponse' }
+
+  /api/dashboard/alerts:
+    get:
+      tags: [Dashboard]
+      summary: Pobiera alerty dashboardu
+      responses:
+        '200':
+          description: Alerty stanowe i terminow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expiryAlerts:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+                  lowStockAlerts:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+
+  /api/audit:
+    get:
+      tags: [Audit]
+      summary: Pobiera log audytowy
+      responses:
+        '200':
+          description: Lista wpisow audytu
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /api/search:
+    get:
+      tags: [Search]
+      summary: Wyszukiwanie pelnotekstowe
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 25, minimum: 1, maximum: 50 } }
+      responses:
+        '200':
+          description: Wynik wyszukiwania
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query: { type: string }
+                  count: { type: integer }
+                  results:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+        '400': { description: Brak parametru q }
+
+  /api/preferences:
+    get:
+      tags: [Preferences]
+      summary: Pobiera preferencje
+      responses:
+        '200':
+          description: Preferencje zalogowanego uzytkownika
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPreferences' }
+    put:
+      tags: [Preferences]
+      summary: Aktualizuje preferencje
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserPreferences' }
+      responses:
+        '200':
+          description: Zapisano preferencje
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/UserPreferences'
+                  - type: object
+                    properties:
+                      message: { type: string }
+
+components:
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: integer
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        role: { type: string, enum: [admin, pharmacist, cashier] }
+        email: { type: string, nullable: true }
+        mfa_enabled: { type: boolean }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string }
+        captchaId: { type: string }
+        captchaText: { type: string }
+
+    MfaChallenge:
+      type: object
+      required: [requiresMfa, username]
+      properties:
+        requiresMfa: { type: boolean, example: true }
+        username: { type: string }
+
+    CaptchaResponse:
+      type: object
+      required: [captchaId, enabled]
+      properties:
+        captchaId: { type: string }
+        svg: { type: string, nullable: true }
+        enabled: { type: boolean }
+
+    Medicine:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        category: { type: string, nullable: true }
+        supplier_id: { type: integer, nullable: true }
+        price: { type: number }
+        stock: { type: integer }
+        expiry_date: { type: string, nullable: true }
+
+    MedicineRequest:
+      type: object
+      required: [name, price]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        supplier_id: { type: integer }
+        price: { type: number }
+        stock: { type: integer }
+        expiry_date: { type: string }
+
+    Supplier:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        contact: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+
+    SupplierRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        contact: { type: string }
+        email: { type: string }
+        phone: { type: string }
+
+    Patient:
+      type: object
+      properties:
+        id: { type: integer }
+        first_name: { type: string }
+        last_name: { type: string }
+        pesel: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+
+    PatientRequest:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        pesel: { type: string }
+        email: { type: string }
+        phone: { type: string }
+
+    Sale:
+      type: object
+      properties:
+        id: { type: integer }
+        prescription_id: { type: integer, nullable: true }
+        medicine_id: { type: integer }
+        quantity: { type: integer }
+        unit_price: { type: number }
+        total_price: { type: number }
+        user_id: { type: integer }
+        sale_date: { type: string }
+
+    SaleRequest:
+      type: object
+      required: [medicine_id, quantity, unit_price, user_id]
+      properties:
+        prescription_id: { type: integer }
+        medicine_id: { type: integer }
+        quantity: { type: integer }
+        unit_price: { type: number }
+        user_id: { type: integer }
+
+    DeliveryListItem:
+      type: object
+      properties:
+        id: { type: integer }
+        supplier_id: { type: integer }
+        supplier_name: { type: string, nullable: true }
+        medicine_id: { type: integer }
+        medicine_name: { type: string, nullable: true }
+        quantity: { type: integer }
+        cost: { type: number }
+        delivery_date: { type: string, nullable: true }
+
+    DeliveryRequest:
+      type: object
+      required: [supplier_id, medicine_id, quantity]
+      properties:
+        supplier_id: { type: integer }
+        medicine_id: { type: integer }
+        quantity: { type: integer }
+        cost: { type: number }
+        delivery_date: { type: string }
+
+    UserPreferences:
+      type: object
+      properties:
+        theme: { type: string, enum: [light, dark] }
+        locale: { type: string, enum: [pl, en, fr] }
+
+    PaginationMeta:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        totalPages: { type: integer }
+
+    PaginatedMedicines:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Medicine' }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    PaginatedSuppliers:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Supplier' }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    PaginatedPatients:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Patient' }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    CreateResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        message: { type: string }
+
+    MessageResponse:
+      type: object
+      properties:
+        message: { type: string }
